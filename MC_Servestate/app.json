@@ -1,0 +1,19 @@
+{
+    "name" : "Minecraft服务器状态检测",
+    "author" : "YoruNina",
+    "namespace" : "mc_servestate",
+    "priority" : 30000,
+    "message_mode" : "old_string",
+    "support" : [
+        {
+            "sdk" : "onebot",
+            "platform" : "qq",
+            "model" : "all"
+        },
+		{
+			"sdk" : "dodo_poll",
+			"platform" : "dodo",
+            "model" : "all"
+		}
+    ]
+}
