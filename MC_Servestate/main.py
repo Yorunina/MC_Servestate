@@ -60,9 +60,14 @@ if __name__ != "__main__":
     serve_obj = serve()
 
 def unity_reply(plugin_event, Proc):
-    mat_set = re.search("\.mcset\s*([^\:]+)\:(\d{1,5})\s*(.+)",plugin_event.data.message)
-    mat_get = re.search("\.ss",plugin_event.data.message)
-    mat_det = re.search("\.pl\s*(\d+)",plugin_event.data.message)
+    if plugin_event.data.message.startswith(('.', '。')):
+        # 清除空格和首位
+        message = plugin_event.data.message[1:].strip()
+    else:
+        return
+    mat_set = re.search("mcset\s*([^\:]+)\:(\d{1,5})\s*(.+)", message, flags=re.I|re.M)
+    mat_get = re.search("mcserve", message, flags=re.I|re.M)
+    mat_det = re.search("mcplayer\s*(\d+)", message, flags=re.I|re.M)
     if  mat_set:
         serve_host = mat_set.group(1)
         serve_port = mat_set.group(2)
