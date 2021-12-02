@@ -4,7 +4,7 @@ import json
 import time
 class StatusPing:
 
-    def __init__(self, host='localhost', port=25565, timeout=5):
+    def __init__(self, host='localhost', port=25565, timeout=2):
         self._host = host
         self._port = port
         self._timeout = timeout
@@ -78,23 +78,24 @@ class StatusPing:
         return byte
 
     def get_status(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:
-            connection.settimeout(self._timeout)
-            connection.connect((self._host, self._port))
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:
+                connection.settimeout(self._timeout)
+                connection.connect((self._host, self._port))
+                # Send handshake + status request
+                self._send_data(connection, b'\x00\x00', self._host, self._port, b'\x01')
+                self._send_data(connection, b'\x00')
 
-            # Send handshake + status request
-            self._send_data(connection, b'\x00\x00', self._host, self._port, b'\x01')
-            self._send_data(connection, b'\x00')
+                # Read response, offset for string length
+                data = self._read_fully(connection, extra_varint=True)
 
-            # Read response, offset for string length
-            data = self._read_fully(connection, extra_varint=True)
+                # Send and read unix time
+                self._send_data(connection, b'\x01', time.time() * 1000)
+                unix = self._read_fully(connection)
 
-            # Send and read unix time
-            self._send_data(connection, b'\x01', time.time() * 1000)
-            unix = self._read_fully(connection)
-
-        # Load json and return
-        response = json.loads(data.decode('utf8'))
-        response['ping'] = int(time.time() * 1000) - struct.unpack('Q', unix)[0]
-
+            # Load json and return
+            response = json.loads(data.decode('utf8'))
+            response['ping'] = int(time.time() * 1000) - struct.unpack('Q', unix)[0]
+        except:
+            return None
         return response
