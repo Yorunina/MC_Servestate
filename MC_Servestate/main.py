@@ -6,17 +6,17 @@ import os
 import threading
 import time;
 platform_bot_info = {}
-listen_player_list = []
-
 
 class Event(object):
     def init(plugin_event, Proc):
+        global log
         bot_dict = Proc.Proc_data['bot_info_dict']
         for key,value in bot_dict.items():
             if value.platform["platform"] == "dodo":
                 platform_bot_info["dodo"] = value
             elif value.platform["platform"] == "qq":
                 platform_bot_info["qq"] = value
+            log = Proc.log
         return
 
     def private_message(plugin_event, Proc):
@@ -28,14 +28,15 @@ class Event(object):
     def save(plugin_event, Proc):
         pass
 
-
+#群组对象
 class Group:
-    def __init__(self, platform, group, channel):
+    def __init__(self, platform, group, channel = None):
         self.platform = platform
         self.group = group
         self.channel = channel
         return
 
+#广播对象
 class Radio:
     def __init__(self):
         self.group = []
@@ -49,15 +50,23 @@ class Radio:
             if group.platform == "dodo":
                 bot_info = platform_bot_info["dodo"]
                 plugin_event_fake = OlivOS.API.Event(OlivOS.contentAPI.fake_sdk_event(bot_info))
-                plugin_event_fake.send('group', group.group, "测试", group.channel)
+                plugin_event_fake.send('group', group.group, msg, group.channel)
+                log
+            if group.platform == "qq":
+                bot_info = platform_bot_info["qq"]
+                plugin_event_fake = OlivOS.API.Event(OlivOS.contentAPI.fake_sdk_event(bot_info))
+                plugin_event_fake.send('group', group.group, msg)
+                log
         return
 
+#玩家对象
 class Player:
     def __init__(self, name, ts):
         self.begin_time = ts
         self.name = name
         return
 
+#服务器对象
 class Serve:
     def __init__(self, name, host ,port):
         self.name = name
@@ -67,6 +76,7 @@ class Serve:
 
 class Process:
     def __init__(self):
+        self.listen_player_list = []
         self.serve_list = []
         self.serve_data = []
         with open(data_file + "/serve_list.json",'r',encoding='utf8')as f:
@@ -120,38 +130,41 @@ class Process:
 
     def player_detail(self, num):
         num = int(num)
+        res_list = []
         if num > len(self.serve_list):
-            return "该服务器并不存在！"
-        player_amount, player_list = self.get_player(self.serve_list[num])
-        if player_amount == 1:
-            return "未知，原因：\n服务器状态异常！"
-        return "\n".join(player_list)
+            return -1
+        now_ts = time.time()
+        for i in self.listen_player_list[num].values():
+            ts_interval = now_ts - i.begin_time
+            ts_str = time.strftime("%H小时%M分", time.gmtime(ts_interval))
+            res_list.append("%s，已游玩：%s" % (i.name,ts_str))
+        if not res_list:
+            return self.serve_list[num].name + "\n" + "服务器当前没有玩家！"
+        return self.serve_list[num].name + "\n" + "\n".join(res_list)
 
     def listen_player(self,  group_radio = True):
         #监听玩家列表
         now_listen_list = []
         for i in range(0, len(self.serve_list)):
-            if i >= len(listen_player_list):
+            if i >= len(self.listen_player_list):
                 #如果是新的id，则新建一个字典
-                listen_player_list[i] = {}
+                self.listen_player_list.append({})
                 #禁用本次的广播
                 group_radio = False
             player_amount, player_list = self.get_player(self.serve_list[i])
-            now_listen_list[i] = player_list
+            now_listen_list.append(player_list)
             #比对新旧列表
-            new_player_list = []
+            new_player_list = {}
             ts = time.time()
             for player in player_list:
-                if player in listen_player_list[i]:
-                    new_player_list[player] = listen_player_list[i][player]
+                if player in self.listen_player_list[i]:
+                    new_player_list[player] = self.listen_player_list[i][player]
                 else:
                     #记录开始游玩时间
                     new_player_list[player] = Player(player, ts)
                     if group_radio:
-                        Radio.all("%s正在游玩：%s" % player,self.serve_list[i])
-            listen_player_list[i] = new_player_list[:]
-
-            
+                        radio_obj.all("%s正在游玩：%s" % (player,self.serve_list[i].name))
+            self.listen_player_list[i] = new_player_list
         return
 
 class LoopTimer(threading.Timer):
@@ -166,7 +179,7 @@ class LoopTimer(threading.Timer):
             self.function(*self.args, **self.kwargs)
 
 def listen_loop():
-    
+    process_obj.listen_player(True)
     return
 
 if __name__ != "__main__":
@@ -179,6 +192,7 @@ if __name__ != "__main__":
             f = open(data_file + sub_file,"w",encoding='utf8')
             f.write("[]")
             f.close()
+    radio_obj = Radio()
     process_obj = Process()
     process_obj.listen_player(False)
     t = LoopTimer(30, listen_loop)
@@ -203,7 +217,7 @@ def unity_reply(plugin_event, Proc):
     if mat_get:
         plugin_event.reply("服务器状况如下：\n" + process_obj.get_player_list())
     if mat_det:
-        plugin_event.reply("当前在线玩家：\n" + process_obj.player_detail(mat_det.group(1)))
+        plugin_event.reply(process_obj.player_detail(mat_det.group(1)))
     if mat_del:
         num = int(mat_del.group(1))
         serve_obj = process_obj.del_data(num)
