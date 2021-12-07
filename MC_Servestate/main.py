@@ -4,19 +4,19 @@ import re
 import json
 import os
 import threading
-import time;
-platform_bot_info = {}
+import time
 
 class Event(object):
     def init(plugin_event, Proc):
         global log
         bot_dict = Proc.Proc_data['bot_info_dict']
-        for key,value in bot_dict.items():
+        for value in bot_dict.values():
             if value.platform["platform"] == "dodo":
                 platform_bot_info["dodo"] = value
             elif value.platform["platform"] == "qq":
                 platform_bot_info["qq"] = value
             log = Proc.log
+        
         return
 
     def private_message(plugin_event, Proc):
@@ -49,15 +49,22 @@ class Radio:
         for group in self.group:
             if group.platform == "dodo":
                 bot_info = platform_bot_info["dodo"]
-                plugin_event_fake = OlivOS.API.Event(OlivOS.contentAPI.fake_sdk_event(bot_info))
-                plugin_event_fake.send('group', group.group, msg, group.channel)
-                log
+                plugin_event_fake = OlivOS.API.Event(OlivOS.contentAPI.fake_sdk_event(bot_info), log)
+                plugin_event_fake.send('group', group.group, msg)
             if group.platform == "qq":
                 bot_info = platform_bot_info["qq"]
-                plugin_event_fake = OlivOS.API.Event(OlivOS.contentAPI.fake_sdk_event(bot_info))
+                plugin_event_fake = OlivOS.API.Event(OlivOS.contentAPI.fake_sdk_event(bot_info), log)
                 plugin_event_fake.send('group', group.group, msg)
-                log
         return
+    def save(self, event):
+        radio_group_obj = Group(event.platform["platform"], event.data.group_id, event.data.host_id)
+        self.group.append(radio_group_obj)
+        radio_data = []
+        with open(data_file + "/radio_list.json",'w',encoding='utf8') as f:
+            for i in self.group:
+                radio_data.append({"platform":i.platform,"group":i.group,"channel":i.channel})
+            json.dump(radio_data, f)
+        return "已成功将当前窗口设置为广播窗口！"
 
 #玩家对象
 class Player:
@@ -78,10 +85,9 @@ class Process:
     def __init__(self):
         self.listen_player_list = []
         self.serve_list = []
-        self.serve_data = []
         with open(data_file + "/serve_list.json",'r',encoding='utf8')as f:
-            self.serve_data = json.load(f)
-            for i in self.serve_data:
+            serve_data = json.load(f)
+            for i in serve_data:
                 serve_obj = Serve(i["name"],i["host"],i["port"])
                 self.serve_list.append(serve_obj)
         return
@@ -102,9 +108,11 @@ class Process:
     def save_data(self, host, port, name):
         #储存当前内存中的数据
         self.serve_list.append(Serve(name, host, port))
-        self.serve_data.append({"name":name,"host":host,"port":port})
+        serve_data = []
         with open(data_file + "/serve_list.json",'w',encoding='utf8') as f:
-            json.dump(self.serve_data, f)
+            for i in self.group:
+                serve_data.append({"name":i.name,"host":i.host,"port":i.port})
+            json.dump(serve_data, f)
         return
 
     def del_data(self, num):
@@ -113,9 +121,11 @@ class Process:
             return False
         serve_obj = self.serve_list[num]
         self.serve_list.pop(num)
-        self.serve_data.pop(num)
+        serve_data = []
         with open(data_file + "/serve_list.json",'w',encoding='utf8') as f:
-            json.dump(self.serve_data, f)
+            for i in self.group:
+                serve_data.append({"name":i.name,"host":i.host,"port":i.port})
+            json.dump(serve_data, f)
         return serve_obj
 
     def get_player_list(self):
@@ -182,21 +192,6 @@ def listen_loop():
     process_obj.listen_player(True)
     return
 
-if __name__ != "__main__":
-    data_file = "./plugin/data/MC_Servestate"
-    if not os.path.exists(data_file):
-        os.mkdir(data_file)
-    sub_files = ["/serve_list.json", "/radio_list.json"]
-    for sub_file in sub_files:
-        if not os.access(data_file + sub_file, os.F_OK):
-            f = open(data_file + sub_file,"w",encoding='utf8')
-            f.write("[]")
-            f.close()
-    radio_obj = Radio()
-    process_obj = Process()
-    process_obj.listen_player(False)
-    t = LoopTimer(30, listen_loop)
-    t.start()
 
 def unity_reply(plugin_event, Proc):
     if plugin_event.data.message.startswith(('.', '。')):
@@ -208,6 +203,7 @@ def unity_reply(plugin_event, Proc):
     mat_get = re.search("mcserve", message, flags=re.I|re.M)
     mat_det = re.search("mcplayer\s*(\d+)", message, flags=re.I|re.M)
     mat_del = re.search("mcdel\s*(\d+)", message, flags=re.I|re.M)
+    mcradio = re.search("mcradio", message, flags=re.I|re.M)
     if  mat_set:
         serve_host = mat_set.group(1)
         serve_port = mat_set.group(2)
@@ -222,13 +218,30 @@ def unity_reply(plugin_event, Proc):
         num = int(mat_del.group(1))
         serve_obj = process_obj.del_data(num)
         if serve_obj:
-            plugin_event.reply("成功删除[%d](%s)服务器！" % num,serve_obj.name)
+            plugin_event.reply("成功删除[%d](%s)服务器！" % (num,serve_obj.name))
         else:
-            plugin_event.reply("删除失败！原因：错误的序号。")
+            plugin_event.reply("删除失败！\n原因：序号必须是当前存在的。")
+    if mcradio:
+        plugin_event.reply(radio_obj.save(plugin_event))
     
     return
 
 
-
+if __name__ != "__main__":
+    platform_bot_info = {}
+    data_file = "./plugin/data/MC_Servestate"
+    if not os.path.exists(data_file):
+        os.mkdir(data_file)
+    sub_files = ["/serve_list.json", "/radio_list.json"]
+    for sub_file in sub_files:
+        if not os.access(data_file + sub_file, os.F_OK):
+            f = open(data_file + sub_file,"w",encoding='utf8')
+            f.write("[]")
+            f.close()
+    radio_obj = Radio()
+    process_obj = Process()
+    process_obj.listen_player(False)
+    t = LoopTimer(30, listen_loop)
+    t.start()
 
 
