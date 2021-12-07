@@ -28,4 +28,4 @@
 | .mcset [服务器ip:端口] [服务器名称] |                 设置查询的mc服务器列表                 | .mcset dmcloud.mxmc.me:2002 Sky Factory 4 |
 |              .mcserve               | 查询所有在列表中的服务器人数，同时返回服务器对应的[ID] |                                           |
 |           .mcplayer [ID]            |                通过ID查询服务器玩家列表                |                .mcplayer 1                |
-
+|           .mcdel [ID]            |                通过ID删除当前监听服务器列表                |                .mcdel 1                |
