@@ -113,12 +113,12 @@ class Process:
             for i in self.group:
                 serve_data.append({"name":i.name,"host":i.host,"port":i.port})
             json.dump(serve_data, f)
-        return
+        return "添加成功！\n已将%s添加到检测名单！" % name
 
     def del_data(self, num):
         #删除对应的数据
         if num >= len(self.serve_list):
-            return False
+            return "删除失败！\n原因：序号必须是当前存在的。"
         serve_obj = self.serve_list[num]
         self.serve_list.pop(num)
         serve_data = []
@@ -126,7 +126,7 @@ class Process:
             for i in self.group:
                 serve_data.append({"name":i.name,"host":i.host,"port":i.port})
             json.dump(serve_data, f)
-        return serve_obj
+        return "删除成功！\n已删除%s服务器的相关信息！" % serve_obj.name
 
     def get_player_list(self):
         serve_str = []
@@ -136,13 +136,13 @@ class Process:
                 serve_str.append("[" + str(i) + "]" + self.serve_list[i].name + " : " + "服务器状态异常！")
             else:
                 serve_str.append("[" + str(i) + "]" + self.serve_list[i].name + " : " + str(player_amount) + "人在线")
-        return "\n".join(serve_str)
+        return "服务器状况如下：\n" + "\n".join(serve_str)
 
     def player_detail(self, num):
         num = int(num)
         res_list = []
         if num > len(self.serve_list):
-            return -1
+            return "查询失败！\n原因：序号必须是当前存在的。"
         now_ts = time.time()
         for i in self.listen_player_list[num].values():
             ts_interval = now_ts - i.begin_time
@@ -208,19 +208,14 @@ def unity_reply(plugin_event, Proc):
         serve_host = mat_set.group(1)
         serve_port = mat_set.group(2)
         serve_name = mat_set.group(3)
-        process_obj.save_data(serve_host, serve_port, serve_name)
-        plugin_event.reply("添加成功√\n已将%s添加到列表中。" % (serve_name))
+        plugin_event.reply(process_obj.save_data(serve_host, serve_port, serve_name))
     if mat_get:
-        plugin_event.reply("服务器状况如下：\n" + process_obj.get_player_list())
+        plugin_event.reply(process_obj.get_player_list())
     if mat_det:
         plugin_event.reply(process_obj.player_detail(mat_det.group(1)))
     if mat_del:
         num = int(mat_del.group(1))
-        serve_obj = process_obj.del_data(num)
-        if serve_obj:
-            plugin_event.reply("成功删除[%d](%s)服务器！" % (num,serve_obj.name))
-        else:
-            plugin_event.reply("删除失败！\n原因：序号必须是当前存在的。")
+        plugin_event.reply(serve_obj = process_obj.del_data(num))
     if mcradio:
         plugin_event.reply(radio_obj.save(plugin_event))
     
